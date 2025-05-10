@@ -3,6 +3,9 @@
   publish = "build"
   environment = { NODE_VERSION = "18" }
 
+# Build hooks configuration
+# This allows you to trigger builds via webhook: curl -X POST -d {} https://api.netlify.com/build_hooks/YOUR_BUILD_HOOK_ID
+
 # Handle SPA routing by redirecting all paths to index.html
 [[redirects]]
   from = "/*"
