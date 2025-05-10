@@ -1,7 +1,7 @@
 # ... (imports as before) ...
 from app.models import LogEvent, GatewayRequest, GatewayResponseAPI, LLMInterpretationResponse
 
-@router.post("/process", response_model=GatewayResponseAPI, ...)
+@router.post("/process", response_model=GatewayResponseAPI)
 async def process_gateway_request(
     request_payload: GatewayRequest,
     background_tasks: BackgroundTasks,
