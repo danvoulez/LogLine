@@ -1,9 +1,8 @@
 import { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
-// Fix path imports to use relative paths instead of aliases
-import { type AuthContextType } from '../types/state/auth';
-import { login as apiLogin, getCurrentUser } from '../utils/api';
-import { validateLoginForm, type LoginRequest } from '../utils/validation';
+import { AuthContext } from '@context/AuthContext';
+import { type AuthContextType } from '@/types/state/auth';
+import { login as apiLogin, getCurrentUser } from '@utils/api';
+import { validateLoginForm, type LoginRequest } from '@utils/validation';
 
 /**
  * Enhanced type-safe useAuth hook

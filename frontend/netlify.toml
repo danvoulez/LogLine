@@ -1,9 +1,26 @@
 [build]
-  command = "npm run build"
+  command = "CI=false npm run build"
   publish = "build"
+  environment = { NODE_VERSION = "18" }
 
 # Handle SPA routing by redirecting all paths to index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Set default security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Content-Security-Policy = "default-src 'self'; connect-src 'self' https://api.logline.app https://*.netlify.app; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:;"
+
+# Define specific build contexts
+[context.production]
+  environment = { REACT_APP_BACKEND_BASE_URL = "https://api.logline.app" }
+
+[context.deploy-preview]
+  environment = { REACT_APP_BACKEND_BASE_URL = "https://staging-api.logline.app" }

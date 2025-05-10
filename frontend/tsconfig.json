@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es5",
+    "target": "es2018",
     "lib": [
       "dom",
       "dom.iterable",
@@ -30,12 +30,16 @@
       "@/*": ["src/*"],
       "@components/*": ["src/components/*"],
       "@hooks/*": ["src/hooks/*"],
-      "@types/*": ["src/types/*"],
       "@context/*": ["src/context/*"],
       "@utils/*": ["src/utils/*"]
-    }
+    },
+    "incremental": true
   },
   "include": [
-    "src"
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "build"
   ]
 }

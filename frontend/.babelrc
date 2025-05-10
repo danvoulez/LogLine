@@ -1,0 +1,18 @@
+{
+  "plugins": [
+    [
+      "module-resolver",
+      {
+        "root": ["./src"],
+        "alias": {
+          "@": "./src",
+          "@components": "./src/components",
+          "@hooks": "./src/hooks",
+          "@types": "./src/types",
+          "@context": "./src/context",
+          "@utils": "./src/utils"
+        }
+      }
+    ]
+  ]
+}
