@@ -1,0 +1,35 @@
+services:
+  # Backend API Service
+  - type: web
+    name: agentos-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.core.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URI
+        sync: false # Set manually in Render
+      - key: OPA_URL
+        sync: false # Set manually in Render
+      - key: LOG_LEVEL
+        value: info
+      - key: JWT_SECRET_KEY
+        sync: false # Set manually in Render
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: LLM_PROVIDER
+        value: mock
+
+  # MongoDB Service
+  - type: pserv
+    name: agentos-mongodb
+    env: docker
+    dockerfilePath: ./deployment/docker-compose.yml
+    dockerContext: ./deployment
+    envVars:
+      - key: MONGO_INITDB_ROOT_USERNAME
+        sync: false # Set manually in Render
+      - key: MONGO_INITDB_ROOT_PASSWORD
+        sync: false # Set manually in Render

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: agentos-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.core.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: OPA_URL
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 60
+      - key: LLM_PROVIDER
+        value: mock
