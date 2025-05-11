@@ -1,10 +1,14 @@
-from pydantic_settings import BaseSettings, Field, AnyHttpUrl, SecretStr, validator
-from typing import List, Optional, Union
+# backend/app/core/settings.py
+
+from pydantic_settings import BaseSettings
+from pydantic import Field, AnyHttpUrl, SecretStr, validator
+from typing import List, Optional
 
 class Settings(BaseSettings):
     """
     Configurações essenciais para inicialização mínima do LogLine.
     """
+
     PROJECT_NAME: str = Field("LogLine", description="Nome do projeto")
     VERSION: str = Field("1.0.0", description="Versão da aplicação")
     API_V1_PREFIX: str = Field("/api/v1", description="Prefixo para todas as rotas")
@@ -20,10 +24,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(60, env="ACCESS_TOKEN_EXPIRE_MINUTES", description="Validade do Access Token em minutos")
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS", description="Validade do Refresh Token em dias")
 
-    BACKEND_CORS_ORIGINS: Union[str, List[AnyHttpUrl]] = Field(default_factory=list, env="BACKEND_CORS_ORIGINS", description="Origens permitidas (CORS)")
+    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = Field(default_factory=list, env="BACKEND_CORS_ORIGINS", description="Origens permitidas (CORS)")
 
+    # Logging e reload
     LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL", description="Nível de log (DEBUG, INFO, ...)")
-    RELOAD: bool = Field(False, env="RELOAD", description="Uvicorn reload (dev)")
+    RELOAD: bool = Field(False, env="RELOAD", description="Habilita reload no Uvicorn (dev)")
 
     class Config:
         env_file = ".env"
@@ -36,12 +41,5 @@ class Settings(BaseSettings):
             raise ValueError("MONGO_URL deve iniciar com mongodb:// ou mongodb+srv://")
         return v
 
-    @validator("BACKEND_CORS_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v):
-        if isinstance(v, str):
-            # Permite lista separada por vírgula no .env ou string única
-            origins = [i.strip() for i in v.split(",") if i.strip()]
-            return origins
-        return v
-
+# Instância global de Settings
 settings = Settings()
