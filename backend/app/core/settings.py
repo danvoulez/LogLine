@@ -1,102 +1,47 @@
-from typing import Any, List, Union, Optional
-import pathlib # Add this import
-
-from pydantic_settings import BaseSettings, SettingsConfigDict # Updated import for Pydantic v2+
-from pydantic import field_validator, Field, AnyHttpUrl, SecretStr
-from pydantic.networks import MongoDsn, RedisDsn # Added for specific DSN validation
-
-from typing import List, Optional
-
+from pydantic import BaseSettings, Field, AnyHttpUrl, SecretStr, validator
+from typing import List, Optional, Union
 
 class Settings(BaseSettings):
     """
-    Configurações centrais da aplicação, carregadas de .env ou do ambiente.
+    Configurações essenciais para inicialização mínima do LogLine.
     """
-
-    # — App Info —
     PROJECT_NAME: str = Field("LogLine", description="Nome do projeto")
     VERSION: str = Field("1.0.0", description="Versão da aplicação")
-    API_V1_PREFIX: str = Field("/api/v1", description="Prefixo para todas as rotas da API")
+    API_V1_PREFIX: str = Field("/api/v1", description="Prefixo para todas as rotas")
 
-    # — Logging & Runtime —
-    LOG_LEVEL: str = Field("INFO", description="Nível de log padrão")
-    RELOAD: bool = Field(False, description="Active reload (dev)")
+    MONGO_URL: AnyHttpUrl = Field(..., env="MONGO_URL", description="URI de conexão MongoDB")
+    REDIS_URL: AnyHttpUrl = Field("redis://localhost:6379", env="REDIS_URL", description="URI de conexão Redis")
 
-    # — MongoDB —
-    MONGO_URI: Optional[MongoDsn] = Field( # Renamed from MONGO_URL
-        default=None,
-        description="URI de conexão com MongoDB (mongodb:// ou mongodb+srv://)"
-    )
+    OPA_URL: Optional[AnyHttpUrl] = Field(None, env="OPA_URL", description="Endpoint do OPA")
+    OPA_ENABLED: bool = Field(False, env="OPA_ENABLED", description="Ativa checagem OPA")
 
-    # — Redis (para cache, sessões e refresh tokens) —
-    REDIS_URL: RedisDsn = Field(
-        default="redis://localhost:6379", # Default is a valid RedisDsn
-        description="URI de conexão com Redis" # pydantic-settings will look for REDIS_URL env var
-    )
+    JWT_SECRET: SecretStr = Field(..., env="JWT_SECRET", min_length=32, description="Chave secreta JWT")
+    JWT_ALGORITHM: str = Field("HS256", env="JWT_ALGORITHM", description="Algoritmo JWT")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(60, env="ACCESS_TOKEN_EXPIRE_MINUTES", description="Validade do Access Token em minutos")
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS", description="Validade do Refresh Token em dias")
 
-    # — Open Policy Agent —
-    OPA_URL: Optional[AnyHttpUrl] = Field(
-        default=None, # Explicitly set default
-        description="Endpoint do OPA para políticas (quando enabled)" # pydantic-settings will look for OPA_URL
-    )
-    OPA_ENABLED: bool = Field(
-        default=False, # Explicitly set default
-        description="Ativa validações OPA (false para desativado)" # pydantic-settings will look for OPA_ENABLED
-    )
+    BACKEND_CORS_ORIGINS: Union[str, List[AnyHttpUrl]] = Field(default_factory=list, env="BACKEND_CORS_ORIGINS", description="Origens permitidas (CORS)")
 
-    # — Autenticação JWT —
-    JWT_SECRET_KEY: Optional[SecretStr] = Field( # Renamed from JWT_SECRET
-        default=None,
-        min_length=32,
-        description="Chave secreta para assinatura de JWT (SecretStr para não expor)"
-    )
-    JWT_ALGORITHM: str = Field(
-        default="HS256", # Explicitly set default
-        description="Algoritmo de assinatura JWT" # pydantic-settings will look for JWT_ALGORITHM
-    )
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field( # Renamed from ACCESS_TOKEN_EXPIRE_MINUTES
-        default=60,
-        description="Tempo de expiração do access token (minutos)"
-    )
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(
-        default=7, # Explicitly set default
-        description="Dias de expiração do refresh token" # pydantic-settings will look for REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL", description="Nível de log (DEBUG, INFO, ...)")
+    RELOAD: bool = Field(False, env="RELOAD", description="Uvicorn reload (dev)")
 
-    # — CORS —
-    BACKEND_CORS_ALLOW_ORIGINS: Optional[str] = Field(
-        default=None, # Explicitly set default
-        description="Origens permitidas, separadas por vírgula" # pydantic-settings will look for BACKEND_CORS_ALLOW_ORIGINS
-    )
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = Field(
-        default_factory=list,
-        description="Origens permitidas para CORS"
-    )
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
-    # Added based on .env extra fields error
-    LLM_PROVIDER: Optional[str] = Field(default=None, description="Provider for LLM service") # pydantic-settings will look for LLM_PROVIDER
+    @validator("MONGO_URL")
+    def check_mongo_scheme(cls, v: AnyHttpUrl) -> AnyHttpUrl:
+        txt = str(v)
+        if not (txt.startswith("mongodb://") or txt.startswith("mongodb+srv://")):
+            raise ValueError("MONGO_URL deve iniciar com mongodb:// ou mongodb+srv://")
+        return v
 
-    model_config = SettingsConfigDict(
-        env_file=pathlib.Path(__file__).resolve().parent.parent.parent / ".env", # Corrected path to backend/.env
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        extra='ignore' # Ignore any other environment variables not defined in this model
-    )
+    @validator("BACKEND_CORS_ORIGINS", pre=True)
+    def assemble_cors_origins(cls, v):
+        if isinstance(v, str):
+            # Permite lista separada por vírgula no .env ou string única
+            origins = [i.strip() for i in v.split(",") if i.strip()]
+            return origins
+        return v
 
-    # Pydantic v2+ uses field_validator instead of validator
-    # Removed assemble_db_connection validator as MongoDsn will handle validation
-
-    # Pydantic v2+ uses field_validator instead of validator
-    @field_validator("BACKEND_CORS_ORIGINS", mode="before") # mode="before" keeps the pre=True behavior
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (List, str)):
-            return v
-        raise ValueError(v)
-
-    # Removed assemble_jwt_secret validator as SecretStr will handle validation and it's optional
-
-
-# Instância global
 settings = Settings()
