@@ -1,70 +1,58 @@
-# ... (imports as before) ...
-from app.models import LogEvent, GatewayRequest, GatewayResponseAPI, LLMInterpretationResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from typing import Any, Dict
+import httpx
+from loguru import logger
+from prometheus_client import Counter, Histogram
 
-@router.post("/process", response_model=GatewayResponseAPI)
-async def process_gateway_request(
-    request_payload: GatewayRequest,
-    background_tasks: BackgroundTasks,
-    token_data: TokenData = Depends(get_token_data_from_header),
-    current_user: CurrentUser = Depends(),
-    llm_service: LLMService = Depends(get_llm_service),
-    log_service: LogService = Depends(get_log_service),
-):
-    author_id = str(current_user.id)
-    log_context = logger.bind(author=author_id, route="gateway/process")
+from app.api.dependencies import get_current_user
+from app.utils.opa_validator import validate_via_opa
+from app.core.settings import settings
+from app.core.exceptions import OPAValidationError
 
-    # ... OPA validation, LLM call ...
+GATEWAY_COUNT = Counter("gateway_requests_total", "Total de requisições no gateway", ["status"])
+GATEWAY_LATENCY = Histogram("gateway_latency_seconds", "Latência do gateway", ["status"])
 
-    llm_interpretation: LLMInterpretationResponse = await llm_service.interpret_request(request_payload)
+router = APIRouter(
+    prefix="/gateway",
+    tags=["Gateway"],
+    responses={
+        200: {"description": "Encaminhamento bem-sucedido"},
+        403: {"description": "Negado por política OPA"},
+        502: {"description": "Erro no serviço downstream"},
+        503: {"description": "OPA indisponível"},
+    },
+)
 
-    # Conversation ID handling
-    current_conversation_id: Optional[str] = llm_interpretation.conversation_id
-    if not current_conversation_id and request_payload.context:
-        current_conversation_id = request_payload.context.get("conversation_id")
-    log_context.debug(f"Initial conversation_id check: {current_conversation_id}")
+@router.post("/", response_model=Dict[str, Any], summary="Proxy seguro para LLM e serviços downstream")
+async def gateway_forward(
+    payload: Dict[str, Any],
+    request: Request,
+    user=Depends(get_current_user)
+) -> Dict[str, Any]:
+    GATEWAY_COUNT.labels(status="start").inc()
+    with GATEWAY_LATENCY.labels(status="start").time():
+        if settings.OPA_ENABLED:
+            try:
+                allowed = await validate_via_opa({"user": user.email, "action": "gateway"})
+            except OPAValidationError as exc:
+                logger.error("OPA indisponível: %s", exc)
+                raise HTTPException(status_code=503, detail="OPA unavailable")
+            if not allowed:
+                logger.info("Acesso negado por política OPA | user=%s", user.email)
+                raise HTTPException(status_code=403, detail="Gateway denied by policy")
 
-    # ... (handle LLM errors, form_request, OPA check, event_data_for_log, etc) ...
+        url = settings.LLM_PROVIDER
+        if not url:
+            raise HTTPException(status_code=500, detail="LLM provider não configurado")
 
-    meta_for_log_event = {
-        "trace_id": log_context.extra.get("trace_id"),
-        "llm_confidence": llm_interpretation.confidence,
-    }
-    if current_conversation_id:
-        meta_for_log_event["conversation_id"] = current_conversation_id
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                GATEWAY_COUNT.labels(status="success").inc()
+                return response.json()
 
-    log_event_draft = LogEvent(
-        type=llm_interpretation.intent,
-        author=author_id,
-        witness="llm_gateway_v2",
-        channel=request_payload.channel,
-        origin=request_payload.source,
-        data=event_data_for_log,
-        consequence={"llm_direct_response_payload": llm_interpretation.response_payload} 
-                     if llm_interpretation.response_type in ["natural_language_text", "structured_data_response"]
-                     else None,
-        meta=meta_for_log_event
-    )
-
-    try:
-        persisted_event = await log_service.record_event(
-            log_event_draft, background_tasks, non_critical_tasks
-        )
-        log_context.success(f"LogEvent '{persisted_event.id}' recorded for gateway request (Type: {persisted_event.type}).")
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Core system error: {e}")
-
-    final_conversation_id = current_conversation_id or persisted_event.id
-    if final_conversation_id == persisted_event.id and (not persisted_event.meta or "conversation_id" not in persisted_event.meta):
-        if persisted_event.meta is None: persisted_event.meta = {}
-        persisted_event.meta["conversation_id"] = final_conversation_id
-        log_context.info(f"New conversation started. ID (from first LogEvent): {final_conversation_id}")
-
-    return GatewayResponseAPI(
-        response_type=llm_interpretation.response_type,
-        payload=llm_interpretation.response_payload,
-        log_id=persisted_event.id,
-        intent_detected=llm_interpretation.intent,
-        follow_up_actions=[action.model_dump() for action in llm_interpretation.follow_up_actions or []],
-        explanation=llm_interpretation.explanation,
-        conversation_id=final_conversation_id
-    )
+        except httpx.HTTPError as exc:
+            logger.error("Erro downstream: %s", exc)
+            GATEWAY_COUNT.labels(status="failure").inc()
+            raise HTTPException(status_code=502, detail="Downstream service error")
