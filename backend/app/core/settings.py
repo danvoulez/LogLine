@@ -1,4 +1,4 @@
-from pydantic import BaseSettings, Field, AnyHttpUrl, SecretStr, validator
+from pydantic_settings import BaseSettings, Field, AnyHttpUrl, SecretStr, validator
 from typing import List, Optional, Union
 
 class Settings(BaseSettings):
