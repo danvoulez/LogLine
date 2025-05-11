@@ -1,6 +1,10 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+# Ensure the llm_service module is loaded before attempting to patch it
+import app.services.llm_service
+import app.utils.opa_validator # Add this import
+
 @pytest.fixture(autouse=True)
 def mock_external_llm_calls():
     with patch("app.services.llm_service.AsyncOpenAI", new_callable=MagicMock) as mock_openai_constructor:

@@ -23,8 +23,12 @@ class LogAcionadoInstitucionalmenteData(BaseModel):
     acionamento_type: ACIONAMENTO_INSTITUCIONAL_TYPE_LITERAL
     motivo_detalhado: str
     evidencias_anexas: Optional[List[Dict[str, str]]] = None
-    _raw_user_input_payload: Optional[Dict[str, Any]] = Field(None, exclude=True)
-    _llm_full_interpretation: Optional[Dict[str, Any]] = Field(None, exclude=True)
+    raw_user_input_payload: Optional[Dict[str, Any]] = Field(None, exclude=True)
+    llm_full_interpretation: Optional[Dict[str, Any]] = Field(None, exclude=True)
+    
+    model_config = {
+        "json_encoders": {datetime: lambda dt: dt.isoformat()}
+    }
 
 class LitigioInstitucionalInfo(BaseModel):
     log_acionamento_event_id: str
@@ -36,6 +40,10 @@ class LitigioInstitucionalInfo(BaseModel):
     resolucao_log_event_id: Optional[str] = None
     resolucao_timestamp: Optional[datetime] = None
     resolucao_detalhes: Optional[str] = None
+    
+    model_config = {
+        "json_encoders": {datetime: lambda dt: dt.isoformat()}
+    }
 
 # Exemplo de uso em CurrentState*:
 # litigios_institucionais: List[LitigioInstitucionalInfo] = Field(default_factory=list)

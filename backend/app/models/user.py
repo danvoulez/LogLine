@@ -14,9 +14,10 @@ class UserInDB(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Quando foi criado")
     last_login: Optional[datetime] = Field(None, description="Último login efetuado")
 
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {datetime: lambda dt: dt.isoformat()}
+    model_config = {
+        "populate_by_name": True,  # replaces allow_population_by_field_name
+        "json_encoders": {datetime: lambda dt: dt.isoformat()}
+    }
 
 
 class LogEventInDB(BaseModel):
@@ -29,6 +30,7 @@ class LogEventInDB(BaseModel):
     details: Dict[str, Any] = Field(default_factory=dict, description="Dados adicionais livres")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Data/hora do evento")
 
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {datetime: lambda dt: dt.isoformat()}
+    model_config = {
+        "populate_by_name": True,  # replaces allow_population_by_field_name
+        "json_encoders": {datetime: lambda dt: dt.isoformat()}
+    }

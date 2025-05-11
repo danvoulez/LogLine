@@ -24,6 +24,7 @@ class UserOut(UserBase):
     is_active: bool = Field(..., description="Se o usuário está ativo")
     created_at: datetime = Field(..., description="Timestamp de criação")
 
-    class Config:
-        orm_mode = True
-        json_encoders = {datetime: lambda dt: dt.isoformat()}
+    model_config = {
+        "from_attributes": True,  # replaces orm_mode
+        "json_encoders": {datetime: lambda dt: dt.isoformat()}
+    }

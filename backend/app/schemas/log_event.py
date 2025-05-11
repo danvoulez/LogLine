@@ -25,6 +25,7 @@ class LogEventOut(LogEventBase):
     id: str = Field(..., description="ID único do evento")
     user_id: str = Field(..., description="ID interno do autor")
     
-    class Config:
-        orm_mode = True
-        json_encoders = {datetime: lambda dt: dt.isoformat()}
+    model_config = {
+        "from_attributes": True,  # replaces orm_mode
+        "json_encoders": {datetime: lambda dt: dt.isoformat()}
+    }
